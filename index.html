@@ -622,8 +622,27 @@ async function forcePull(){
 }
 
 function signInGoogle(){
-  if(!fbAuth) return;
-  fbAuth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+  if(!fbAuth){alert('클라우드가 초기화되지 않았습니다. 페이지를 새로고침해 주세요.');return}
+  const provider=new firebase.auth.GoogleAuthProvider();
+  setCloudStatus('로그인 창을 여는 중…');
+  fbAuth.signInWithPopup(provider).catch(e=>{
+    const code=(e&&e.code)||'';
+    if(code==='auth/popup-closed-by-user'||code==='auth/cancelled-popup-request'){
+      setCloudStatus('로그인이 취소되었습니다.');
+      return;
+    }
+    // 팝업이 막히는 환경(일부 모바일/인앱 브라우저)에서만 리다이렉트로 대체
+    if(code==='auth/popup-blocked'||code==='auth/operation-not-supported-in-this-environment'){
+      setCloudStatus('팝업이 차단되어 리다이렉트 방식으로 로그인합니다…');
+      fbAuth.signInWithRedirect(provider).catch(e2=>{
+        setCloudStatus(`❌ 로그인 실패: ${e2.code||''} ${e2.message}`,true);
+        alert('로그인 실패\n\n코드: '+(e2.code||'(없음)')+'\n\n'+e2.message);
+      });
+      return;
+    }
+    setCloudStatus(`❌ 로그인 실패: ${code} ${e.message}`,true);
+    alert('로그인 실패\n\n코드: '+(code||'(없음)')+'\n\n'+e.message);
+  });
 }
 function signOutCloud(){
   if(!fbAuth) return;
