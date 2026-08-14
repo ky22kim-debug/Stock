@@ -432,6 +432,7 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
       <button class="btn" id="cloud-login-btn" onclick="signInGoogle()">🔐 Google로 로그인하고 동기화 시작</button>
       <button class="btn btn-sec" id="cloud-push-btn" style="display:none" onclick="forcePush()">⬆ 지금 클라우드로 올리기</button>
       <button class="btn btn-sec" id="cloud-pull-btn" style="display:none" onclick="forcePull()">⬇ 클라우드에서 불러오기</button>
+      <button class="btn btn-sec" id="cloud-diag-btn" style="display:none" onclick="cloudDiagnose()">🔍 연결 진단</button>
       <button class="btn btn-sec" id="cloud-logout-btn" style="display:none" onclick="signOutCloud()">로그아웃</button>
     </div>
     <div class="sync-badge" id="cloud-status"></div>
@@ -563,7 +564,7 @@ function onCloudAuthChanged(user){
   setCloudAccount(user);
   if(user){
     show('cloud-login-btn',false); show('cloud-logout-btn',true);
-    show('cloud-push-btn',true); show('cloud-pull-btn',true);
+    show('cloud-push-btn',true); show('cloud-pull-btn',true); show('cloud-diag-btn',true);
     setCloudStatus(`🟢 ${user.displayName||user.email} 로 실시간 동기화 중`);
     unsubDoc=cloudDocRef(user.uid).onSnapshot(snap=>{
       if(!snap.exists){ pushCloud(true); return }
@@ -580,27 +581,81 @@ function onCloudAuthChanged(user){
     });
   } else {
     show('cloud-login-btn',true); show('cloud-logout-btn',false);
-    show('cloud-push-btn',false); show('cloud-pull-btn',false);
+    show('cloud-push-btn',false); show('cloud-pull-btn',false); show('cloud-diag-btn',false);
     setCloudStatus('로그인하면 이 계정으로 여러 기기가 실시간 동기화됩니다.');
   }
 }
 
-/* 수동 진단·복구: 실제 서버 응답을 그대로 보여준다 */
+/* 수동 진단·복구: 실제 서버 응답을 그대로 보여준다.
+   Firestore는 서버에 닿지 못하면 요청이 무한 대기하므로 항상 타임아웃을 건다. */
+function withTimeout(promise,ms,label){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>{
+      const err=new Error(`${label}: ${ms/1000}초 동안 서버 응답이 없습니다. Firestore 데이터베이스가 생성되지 않았거나(또는 Datastore 모드로 생성됨), 네트워크가 차단되었을 수 있습니다.`);
+      err.code='app/timeout';
+      reject(err);
+    },ms))
+  ]);
+}
+
 async function forcePush(){
   if(!fbUser){alert('먼저 로그인하세요');return}
+  setCloudStatus('클라우드로 업로드 중…');
   try{
-    await cloudDocRef(fbUser.uid).set({...DB,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    await withTimeout(
+      cloudDocRef(fbUser.uid).set({...DB,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}),
+      12000,'업로드');
     setCloudStatus(`✅ 클라우드 업로드 성공 (${new Date().toLocaleTimeString('ko-KR')})`);
     toast('클라우드에 저장했습니다.');
+    alert('클라우드 업로드 성공');
   }catch(e){
     setCloudStatus(`❌ 업로드 실패: ${e.code||''} ${e.message}`,true);
     alert('업로드 실패\n\n코드: '+(e.code||'(없음)')+'\n\n'+e.message);
   }
 }
+
+/* 연결 진단: 로그인·서버 읽기·서버 쓰기를 차례로 확인해 결과를 한 번에 보여준다 */
+async function cloudDiagnose(){
+  const lines=[];
+  lines.push('프로젝트: '+firebaseConfig.projectId);
+  lines.push('앱 주소: '+location.origin);
+  if(!fbUser){
+    lines.push('로그인: ❌ 로그인되어 있지 않음');
+    alert(lines.join('\n'));
+    return;
+  }
+  lines.push('로그인: ✅ '+(fbUser.email||fbUser.displayName));
+  lines.push('uid: '+fbUser.uid);
+
+  try{
+    const snap=await withTimeout(cloudDocRef(fbUser.uid).get({source:'server'}),12000,'서버 읽기');
+    lines.push('서버 읽기: ✅ 성공 (문서 '+(snap.exists?'있음':'없음')+')');
+    if(snap.exists){
+      const d=snap.data()||{};
+      lines.push(`  클라우드 데이터: 일별 ${(d.daily||[]).length}건 / 매매 ${(d.trades||[]).length}건 / 일지 ${(d.diary||[]).length}건`);
+    }
+  }catch(e){
+    lines.push('서버 읽기: ❌ '+(e.code||'')+' '+e.message);
+  }
+
+  try{
+    await withTimeout(cloudDocRef(fbUser.uid).set({pingAt:new Date().toISOString()},{merge:true}),12000,'서버 쓰기');
+    lines.push('서버 쓰기: ✅ 성공');
+  }catch(e){
+    lines.push('서버 쓰기: ❌ '+(e.code||'')+' '+e.message);
+  }
+
+  const text=lines.join('\n');
+  setCloudStatus(text.replace(/\n/g,' | '));
+  alert(text);
+}
+
 async function forcePull(){
   if(!fbUser){alert('먼저 로그인하세요');return}
+  setCloudStatus('클라우드에서 불러오는 중…');
   try{
-    const snap=await cloudDocRef(fbUser.uid).get({source:'server'});
+    const snap=await withTimeout(cloudDocRef(fbUser.uid).get({source:'server'}),12000,'불러오기');
     if(!snap.exists){
       setCloudStatus('클라우드에 저장된 기록이 아직 없습니다.',true);
       alert('클라우드에 저장된 데이터가 없습니다.\n\n기록이 있는 기기에서 "⬆ 지금 클라우드로 올리기"를 먼저 눌러주세요.');
