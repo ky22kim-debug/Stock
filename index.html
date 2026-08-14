@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ETF 3계좌 통합 관리</title>
+<meta name="description" content="DC/퇴직연금/개인연금 3계좌 ETF 투자 기록·현금 잔고 관리 앱 (오프라인, PWA)">
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ETF관리">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0d1117; --surface:#161b22; --surface2:#1c2128; --border:#30363d;
+  --text:#e6edf3; --muted:#7d8590; --accent:#f0c040;
+  --green:#3fb950; --red:#f85149; --blue:#58a6ff; --purple:#bc8cff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Malgun Gothic',sans-serif;padding:12px 10px 60px;font-size:14px}
+
+/* 탭 */
+.tabs{display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap}
+.tab{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);
+  font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;transition:.15s}
+.tab.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.panel{display:none}
+.panel.active{display:block}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.card-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px}
+.sub{font-size:11px;color:var(--muted);line-height:1.7}
+
+/* 입력 */
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px}
+.fg{display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px}
+.fg label{font-size:10px;color:var(--muted);font-weight:600}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:7px;
+  color:var(--text);font-size:13px;padding:8px 10px;outline:none;width:100%;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:90px;line-height:1.6}
+.btn{background:var(--accent);color:#000;border:none;border-radius:7px;font-size:13px;
+  font-weight:700;padding:9px 16px;cursor:pointer;white-space:nowrap}
+.btn:hover{opacity:.85}
+.btn-sec{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-del{background:transparent;border:1px solid #f8514950;color:var(--red);font-size:11px;padding:4px 9px}
+.file-btn{position:relative;overflow:hidden;display:inline-block}
+.file-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+
+/* 테이블 */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+th{background:var(--surface2);padding:8px 9px;font-size:10px;font-weight:600;color:var(--muted);
+  text-align:center;border-bottom:1px solid var(--border);position:sticky;top:0}
+td{padding:8px 9px;text-align:center;border-bottom:1px solid #30363d40;font-variant-numeric:tabular-nums}
+tr:hover td{background:#ffffff06}
+.pos{color:var(--green)}
+.neg{color:var(--red)}
+.num{text-align:right}
+
+/* 통계 */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-bottom:12px}
+.stat{background:var(--surface2);border-radius:10px;padding:11px}
+.stat-l{font-size:10px;color:var(--muted);margin-bottom:5px}
+.stat-v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+
+.chart-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;height:280px}
+
+/* 배지 */
+.badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;display:inline-block}
+.b-buy{background:#0d2a0d;color:var(--green)}
+.b-sell{background:#3a0808;color:var(--red)}
+.b-acc1{background:#1a2940;color:#a8d8ff}
+.b-acc2{background:#2a1a3a;color:var(--purple)}
+.b-acc3{background:#2a2a0d;color:var(--accent)}
+.b-cash{background:#0d2a24;color:#3ddcc4}
+
+/* 일지 */
+.diary{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
+  padding:12px;margin-bottom:10px}
+.diary-d{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:3px}
+.diary-m{font-size:10px;color:var(--muted);margin-bottom:7px}
+.diary-t{font-size:13px;line-height:1.75;white-space:pre-wrap}
+
+/* 매뉴얼 */
+.m-tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.m-tab{background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--muted);
+  font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer}
+.m-tab.active{background:var(--accent);color:#000}
+.m-panel{display:none}
+.m-panel.active{display:block}
+.m-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:10px}
+.m-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:7px}
+.m-desc{font-size:12px;color:var(--muted);line-height:1.8}
+.verdict{font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;display:inline-block;margin-top:7px}
+.v-good{background:#0d3a1a;color:var(--green)}
+.v-bad{background:#3a0808;color:var(--red)}
+.v-info{background:#1a2040;color:var(--blue)}
+
+.empty{text-align:center;padding:36px 16px;color:var(--muted);font-size:13px}
+.hint{font-size:11px;color:var(--muted);line-height:1.7;background:#1a2040;border-radius:7px;padding:9px 11px;margin-bottom:10px}
+.hint b{color:#a8c8ff}
+.sync-badge{font-size:10px;color:var(--muted);margin-top:6px}
+hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:10px 16px;border-radius:8px;font-size:12px;opacity:0;pointer-events:none;
+  transition:.2s;z-index:999;box-shadow:0 6px 20px #0008}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" onclick="tab('dash')">📊 대시보드</button>
+  <button class="tab" onclick="tab('trade')">🛒 매매기록</button>
+  <button class="tab" onclick="tab('daily')">📅 일별잔고</button>
+  <button class="tab" onclick="tab('diary')">📓 투자일지</button>
+  <button class="tab" onclick="tab('manual')">📘 매뉴얼</button>
+  <button class="tab" onclick="tab('data')">💾 데이터</button>
+</div>
+
+<!-- ─── 대시보드 ─── -->
+<div id="p-dash" class="panel active">
+  <div class="stats" id="dash-stats"></div>
+  <div class="chart-box"><canvas id="chart-total"></canvas></div>
+  <div class="chart-box"><canvas id="chart-profit"></canvas></div>
+  <div class="card">
+    <div class="card-title">계좌별 현황 (ETF평가 + 예수금)</div>
+    <div class="tw"><table id="acc-table"></table></div>
+  </div>
+</div>
+
+<!-- ─── 매매기록 ─── -->
+<div id="p-trade" class="panel">
+  <div class="card">
+    <div class="card-title">매매 입력</div>
+    <div class="row">
+      <div class="fg"><label>날짜</label><input type="date" id="t-date"></div>
+      <div class="fg"><label>계좌</label><select id="t-acc">
+        <option value="DC">DC계좌</option>
+        <option value="퇴직연금">퇴직 연금(112)</option>
+        <option value="개인연금">개인 연금(113)</option>
+      </select></div>
+      <div class="fg"><label>구분</label><select id="t-type">
+        <option value="매수">매수</option><option value="매도">매도</option>
+      </select></div>
+    </div>
+    <div class="row">
+      <div class="fg" style="flex:2"><label>종목명</label><input type="text" id="t-name" placeholder="PLUS 글로벌HBM반도체"></div>
+      <div class="fg"><label>수량</label><input type="number" id="t-qty" placeholder="100"></div>
+      <div class="fg"><label>단가</label><input type="number" id="t-px" placeholder="102830"></div>
+    </div>
+    <div class="row">
+      <div class="fg" style="flex:2"><label>매매사유</label><select id="t-reason">
+        <option>초기매수</option><option>분할매수</option><option>추가매수</option>
+        <option>8% 손절매수</option><option>-7% 1차재매수</option><option>절정+5% 재매수</option>
+        <option>모멘텀붕괴 청산</option><option>급등 시 부분익절</option><option>목표가 익절</option><option>기타</option>
+      </select></div>
+      <div class="fg"><label>기준고가</label><input type="number" id="t-high" placeholder="선택"></div>
+      <div class="fg"><label>손절가</label><input type="number" id="t-stop" placeholder="자동계산"></div>
+    </div>
+    <div class="row">
+      <div class="fg"><label>코스피</label><input type="number" id="t-kospi" placeholder="6257" step="0.01"></div>
+      <div class="fg"><label>외국인 순매매(억)</label><input type="number" id="t-frgn" placeholder="-28000"></div>
+      <div class="fg" style="flex:2"><label>메모</label><input type="text" id="t-memo" placeholder="선택"></div>
+      <button class="btn" onclick="addTrade()">+ 기록</button>
+    </div>
+    <div class="hint">기준고가를 입력하면 손절가(-8%)가 자동 계산됩니다. 매매 기록이 있는 일지는 자동으로 연동됩니다.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">매매 이력 <span id="trade-cnt" class="sub"></span></div>
+    <div class="row" style="margin-bottom:10px">
+      <div class="fg"><label>계좌 필터</label><select id="f-acc" onchange="renderTrades()">
+        <option value="">전체</option><option value="DC">DC계좌</option>
+        <option value="퇴직연금">퇴직 연금(112)</option><option value="개인연금">개인 연금(113)</option>
+      </select></div>
+      <div class="fg"><label>구분</label><select id="f-type" onchange="renderTrades()">
+        <option value="">전체</option><option value="매수">매수</option><option value="매도">매도</option>
+      </select></div>
+    </div>
+    <div class="tw"><table id="trade-table"></table></div>
+  </div>
+</div>
+
+<!-- ─── 일별잔고 ─── -->
+<div id="p-daily" class="panel">
+  <div class="card">
+    <div class="card-title">일별 잔고 입력</div>
+    <div class="row">
+      <div class="fg"><label>날짜</label><input type="date" id="d-date"></div>
+      <div class="fg"><label>코스피</label><input type="number" id="d-kospi" placeholder="6257" step="0.01"></div>
+      <div class="fg" style="flex:2"><label>비고</label><input type="text" id="d-memo" placeholder="선택"></div>
+    </div>
+    <div class="sub" style="margin:2px 0 6px">계좌별 ETF 평가금액 / 예수금(현금)을 각각 입력하세요. 비워두면 0으로 처리됩니다.</div>
+    <div class="row">
+      <div class="fg"><label><span class="badge b-acc1">DC</span> ETF평가</label><input type="number" id="d-dc" placeholder="원"></div>
+      <div class="fg"><label><span class="badge b-cash">DC</span> 예수금</label><input type="number" id="d-dc-cash" placeholder="원"></div>
+    </div>
+    <div class="row">
+      <div class="fg"><label><span class="badge b-acc2">퇴직연금</span> ETF평가</label><input type="number" id="d-co" placeholder="원"></div>
+      <div class="fg"><label><span class="badge b-cash">퇴직연금</span> 예수금</label><input type="number" id="d-co-cash" placeholder="원"></div>
+    </div>
+    <div class="row">
+      <div class="fg"><label><span class="badge b-acc3">개인연금</span> ETF평가</label><input type="number" id="d-pe" placeholder="원"></div>
+      <div class="fg"><label><span class="badge b-cash">개인연금</span> 예수금</label><input type="number" id="d-pe-cash" placeholder="원"></div>
+      <button class="btn" onclick="addDaily()">+ 기록</button>
+    </div>
+    <div class="hint">매일 종가 기준 잔고(ETF 평가금액 + 예수금)를 기록하면 누적 자산 그래프가 자동으로 그려집니다.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">일별 잔고 이력</div>
+    <div class="tw"><table id="daily-table"></table></div>
+  </div>
+</div>
+
+<!-- ─── 투자일지 ─── -->
+<div id="p-diary" class="panel">
+  <div class="card">
+    <div class="card-title">오늘의 투자일지</div>
+    <div class="row">
+      <div class="fg"><label>날짜</label><input type="date" id="dy-date"></div>
+      <div class="fg"><label>시장 분위기</label><select id="dy-mood">
+        <option>😐 보합</option><option>😊 강세</option><option>🚀 상승</option>
+        <option>😰 하락</option><option>🔥 급락</option><option>🌊 변동성</option>
+      </select></div>
+    </div>
+    <div class="row">
+      <div class="fg" style="flex:1;min-width:100%">
+        <label>일지 내용</label>
+        <textarea id="dy-text" placeholder="오늘 시장은 어땠는지, 어떤 판단을 하고 왜 그랬는지, 룰을 지켰는지, 무엇을 배웠는지…"></textarea>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="addDiary()">+ 일지 저장</button></div>
+  </div>
+  <div id="diary-list"></div>
+</div>
+
+<!-- ─── 매뉴얼 ─── -->
+<div id="p-manual" class="panel">
+  <div class="m-tabs">
+    <button class="m-tab active" onclick="mtab('stop')">✂️ 손절</button>
+    <button class="m-tab" onclick="mtab('rebuy')">🔁 재매수</button>
+    <button class="m-tab" onclick="mtab('leader')">💡 주도주 교체</button>
+    <button class="m-tab" onclick="mtab('bt')">🧪 백테스트 결론</button>
+  </div>
+
+  <div id="m-stop" class="m-panel active">
+    <div class="m-card">
+      <div class="m-title">🏆 채택 전략 — 8% 단일 손절매</div>
+      <div class="m-desc">장중 <b style="color:#f0c040">고가 기준</b> -8% 도달 시 <b style="color:#f85149">전량 손절</b>. 고가가 갱신되면 손절가도 함께 올라갑니다.<br><br>
+      5/10% 단계 손절 대비 <b>모든 검증 기간에서 우세</b>. 한 번에 정리해 현금 100%를 확보하는 것이 재진입 기회를 극대화합니다.</div>
+      <div class="verdict v-good">✅ 백테스트 최우선</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">❌ 폐기 — 5/10% 단계 손절</div>
+      <div class="m-desc">-5% 절반 → -10% 전량 방식. 평균 손절가가 -7.5%로 8%와 거의 같은데 관리 포인트만 두 배가 되고, 손실 구간 체류 시간이 길어집니다.</div>
+      <div class="verdict v-bad">❌ 이전 대비 열위</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">❌ 폐기 — 절반 손절 후 나머지 유지</div>
+      <div class="m-desc">절반만 손절해 손실을 지키고 갭상승을 먹는 방식. 절반을 든 채 추가 하락을 맞는 손실이 갭상승 이익을 상쇄했습니다.</div>
+      <div class="verdict v-bad">❌ 이전 대비 열위</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">⚠️ 갭 발생 시</div>
+      <div class="m-desc">
+        <b style="color:#f85149">갭하락 손절</b> — 시가가 손절가 이하면 손절가가 아닌 <b>시가</b>에 체결됩니다.<br><br>
+        <b style="color:#58a6ff">갭상승 재매수</b> — 시가가 목표가 위면 <b>시가</b>에 매수하게 됩니다.<br><br>
+        두 경우 모두 불리한 방향으로 작용하므로 실제 성과는 계산보다 낮게 잡는 것이 안전합니다.
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">🌪️ 변동성 대응</div>
+      <div class="m-desc">일일 변동폭이 6~10%인 종목은 5% 손절을 걸면 노이즈에 쉽게 반응합니다. <b>손절 폭은 종목 변동성에 비례</b>해야 합니다.<br><br>
+      고변동성 반도체 ETF 기준 <b style="color:#f0c040">-8%</b>가 최적 구간으로 검증됩니다.</div>
+    </div>
+  </div>
+
+  <div id="m-rebuy" class="m-panel">
+    <div class="m-card">
+      <div class="m-title">🏆 채택 전략 — C 전략</div>
+      <div class="m-desc">
+        <b style="color:#1D9E75">1차</b> 손절가 대비 <b>-7%</b> 추가 하락 → <b>절반 즉시 매수</b><br>
+        <b style="color:#0F6E56">2차</b> 손절 후 저점 대비 <b>+2.5% × 2구간(=+5%)</b> → <b>나머지 절반 매수</b><br><br>
+        두 조건 중 <b style="color:#f0c040">먼저 도달하는 것</b>으로 실행합니다. 저점이 갱신되면 +2.5% 카운트는 리셋됩니다.
+      </div>
+      <div class="verdict v-good">✅ 상승장 유의미 우세 · 하락장 근소 우세</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">📋 반응 순서</div>
+      <div class="m-desc" style="line-height:2.1">
+        1️⃣ 손절매 완료 → 최저점 추적 시작<br>
+        2️⃣ 손절가 -7% 도달 → <b>절반</b> 즉시 매수<br>
+        3️⃣ 최저점 +2.5% → 1단계 확인<br>
+        4️⃣ 최저점 +5.0% → <b>나머지 절반</b> 매수<br>
+        5️⃣ 전량 매수 완료 → 고가 기준 -8% 손절가 재설정
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">⏱️ 판단의 장중 기준</div>
+      <div class="m-desc">재매수 조건은 <b style="color:#f0c040">장중</b>으로 판단합니다. 종가 기준이나 다음날 시가로 바꾸면 급락 후 반등을 놓쳐 성과를 훼손합니다.<br><br>
+      단 <b>손절</b>과 <b>추세 판단</b>은 종가 기준을 유지합니다.</div>
+      <div class="verdict v-info">장중 = 재매수 / 종가 = 손절·추세</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">❌ 폐기 — 절대 즉시 재매수</div>
+      <div class="m-desc">-7% 도달 시 전량 재매수하는 방식. 확신 없는 진입이 잦아지고, 추가 하락 시 대응 현금이 사라집니다. 절반 진입 방식이 리스크를 줄이면서 수익 기회는 그대로 남깁니다.</div>
+      <div class="verdict v-bad">❌ 이전 대비 열위</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">🚫 예외 — 모멘텀 붕괴 시 룰 정지</div>
+      <div class="m-desc">
+        아래가 동시에 확인되면 재매수 룰을 <b style="color:#f85149">정지</b>하고 현금을 유지합니다.<br><br>
+        • 추세선 이탈 이후<br>
+        • 외국인 대량 매도 지속(1조 이상)<br>
+        • 반등강도 역전 (지수보다 더 크게 하락)<br><br>
+        <b style="color:#f0c040">단일 조정은 룰대로, 추세 자체가 붕괴되면 판단이 우선</b>입니다.
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">📚 이론적 근거</div>
+      <div class="m-desc">
+        절반 재매수 + 현금 진보 구조는 우연이 아니라 검증된 이론과 일치합니다.<br><br>
+        <b style="color:#58a6ff">켈리 공식</b> — 최적 베팅 비율. 전액 투입은 과베팅<br>
+        <b style="color:#58a6ff">반켈리(Half-Kelly)</b> — 추정 오류 대비, 파산 방지<br>
+        <b style="color:#58a6ff">불확실성 회피</b> — 불확실 확산 시 현금 일부 보존<br>
+        <b style="color:#58a6ff">마틴 페이딩</b> — 반벌 전략, 밸런스의 대비
+      </div>
+    </div>
+  </div>
+
+  <div id="m-leader" class="m-panel">
+    <div class="m-card">
+      <div class="m-title">⚠️ 주도주 하락 경고 신호</div>
+      <div class="m-desc" style="line-height:2.1">
+        🔴 <b>실적 내러티브 붕괴</b><br>
+        &nbsp;&nbsp;• 실비디아 실적 가이던스 하향<br>
+        &nbsp;&nbsp;• HBM 공급과잉 신호<br>
+        &nbsp;&nbsp;• 빅테크 AI CAPEX 감소<br><br>
+        🔴 <b>반등강도 역전</b><br>
+        &nbsp;&nbsp;• 코스피 상승 중 HBM ETF 하락<br>
+        &nbsp;&nbsp;• 2~3주 연속 코스피 대비 언더<br><br>
+        🔴 <b>퍼펙 신호</b><br>
+        &nbsp;&nbsp;• 5회 연속 구간 도달<br>
+        &nbsp;&nbsp;• 고점 대비 -40% 이상
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">🔀 단계별 판단</div>
+      <div class="m-desc" style="line-height:2.2">
+        <span style="color:#ffe066">1차 경고</span> — 코스피 신고가 갱신 중 보유 ETF 신고 미달<br>
+        <span style="color:#ffb060">2차 경고</span> — ETF 조정폭이 코스피 조정폭의 2배 이상<br>
+        <span style="color:#ff6060">교체 확정</span> — 내러티브 붕괴 + 언더퍼폼 2주 + 5회 연속 도달
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">🔄 교체 시 대응</div>
+      <div class="m-desc" style="line-height:2">
+        손절 룰과 무관하게 <b style="color:#f85149">전략적 전량 청산</b> → 다음 주도주 탐색<br><br>
+        <b>역대 교체 사례</b><br>
+        2021 반도체 → 2차전지<br>
+        2023 2차전지 → 반도체(HBM)<br>
+        다음 후보: AI 소프트웨어, 전력인프라, 바이오
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">💡 내러티브 vs 모멘텀</div>
+      <div class="m-desc">
+        내러티브가 살아있어도 <b style="color:#f85149">모멘텀이 깨지면 현금</b>이 맞습니다.<br><br>
+        추세추종과 가치투자를 섞으면 안 됩니다. 내러티브를 믿고 손실을 미루는 것이 대형 손실의 시작입니다.<br><br>
+        <b style="color:#f0c040">내러티브는 참고, 시기는 확인, 결정은 가격과 룰로.</b>
+      </div>
+    </div>
+  </div>
+
+  <div id="m-bt" class="m-panel">
+    <div class="m-card">
+      <div class="m-title">🧪 검증 완료 항목</div>
+      <div class="tw"><table>
+        <tr><th>검증 항목</th><th>결과</th></tr>
+        <tr><td style="text-align:left">8% 손절 vs 5/10% 단계</td><td class="pos">8% 손절 우세</td></tr>
+        <tr><td style="text-align:left">재매수 절반 vs 전량</td><td class="pos">절반 우세</td></tr>
+        <tr><td style="text-align:left">재매수 장중 vs 종가</td><td class="pos">장중 우세</td></tr>
+        <tr><td style="text-align:left">절반손절 후 나머지 유지</td><td class="neg">이전</td></tr>
+        <tr><td style="text-align:left">손절 후 즉시전량재매수</td><td class="neg">이전</td></tr>
+        <tr><td style="text-align:left">갭등 절반익절</td><td style="color:#7d8590">검증 불충분</td></tr>
+      </table></div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">📌 최종 룰 요약</div>
+      <div class="tw"><table>
+        <tr><th>단계</th><th>조건</th><th>행동</th></tr>
+        <tr><td>손절</td><td>장중 고가 -8%</td><td class="neg">전량 매도</td></tr>
+        <tr><td>1차 재매수</td><td>손절가 -7%</td><td class="pos">절반 매수</td></tr>
+        <tr><td>2차 재매수</td><td>저점 +2.5%×2</td><td class="pos">나머지 절반</td></tr>
+        <tr><td>예외</td><td>모멘텀 붕괴</td><td style="color:#f0c040">룰 정지·현금</td></tr>
+      </table></div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">💬 백테스트 한계</div>
+      <div class="m-desc">
+        • 검증 데이터는 특정 기간의 단일 종목 기준입니다<br>
+        • 상승장 비중이 높아 장기 하락장 검증은 부족합니다<br>
+        • 시장이 다시 갈 것이란 특정 상황을 전제로 있습니다<br>
+        • 슬리피지·수수료·세금은 반영되지 않았습니다<br><br>
+        <b style="color:#f0c040">경향성은 확인됐으나 절대적 답은 아닙니다.</b> 결과가 좋았다고 판단이 옳은 것도, 나빴다고 틀린 것도 아닙니다. 판단은 실행 <b>그 시점의 근거가 합리적이었는가</b>로 평가해야 합니다.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 데이터 ─── -->
+<div id="p-data" class="panel">
+  <div class="card">
+    <div class="card-title">🔗 구글 드라이브 동기화</div>
+    <div class="hint">
+      1) PC/모바일 <b>구글 드라이브</b>에 전용 폴더(예: <b>ETF관리백업</b>)를 하나 만들어 두세요.<br>
+      2) 이 기기에서 "파일로 내보내기"를 누르면 JSON 백업 파일이 다운로드됩니다 → 그 파일을 드라이브 폴더로 옮기세요(모바일은 다운로드 후 드라이브 앱의 업로드 기능 이용).<br>
+      3) 다른 기기에서는 "파일 가져오기"를 누르고 드라이브 폴더에서 최신 백업 파일을 선택하면 됩니다. 파일 선택창에 구글 드라이브가 보이지 않으면 드라이브 앱을 먼저 설치하세요.<br>
+      4) 항상 <b>가장 최근에 내보낸 파일</b>을 가져와야 최신 상태가 유지됩니다. 두 기기에서 동시에 기록을 추가하면 나중에 가져오는 쪽이 앞선 변경을 덮어씁니다.
+    </div>
+    <div class="row">
+      <button class="btn" onclick="exportFile()">⬇ 파일로 내보내기</button>
+      <label class="btn btn-sec file-btn">📂 파일 가져오기
+        <input type="file" accept="application/json,.json" onchange="importFile(event)">
+      </label>
+    </div>
+    <div class="sync-badge" id="last-sync"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📥 기존 데이터 붙여넣기</div>
+    <div class="hint">
+      엑셀 <b>일별잔고</b> 시트에서 <b>날짜 / DC평가 / DC현금 / 퇴직연금평가 / 퇴직연금현금 / 개인연금평가 / 개인연금현금 / 코스피 / 비고</b> 순서로 범위를 복사해 아래에 붙여넣으세요.<br>
+      • 탭 구분(엑셀 복사) 또는 쉼표(CSV) 모두 인식합니다<br>
+      • 금액에 ₩, 쉼표, "만원" 같은 표기가 있어도 자동 처리됩니다<br>
+      • 열이 부족하면 앞에서부터 순서대로 채워집니다 (현금 열이 없으면 0으로 처리)
+    </div>
+    <textarea id="paste-area" style="min-height:180px;font-family:monospace;font-size:12px"
+      placeholder="2024-12-31&#9;170000000&#9;4670000&#9;76000000&#9;2660000&#9;0&#9;0&#9;&#9;코스닥 하락대비 채권보유중&#10;2025-02-03&#9;170000000&#9;4670000&#9;76000000&#9;2660000&#9;0&#9;0"></textarea>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn btn-sec" onclick="document.getElementById('paste-area').value=''">지우기</button>
+      <button class="btn" onclick="importPaste()">가져오기</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💾 텍스트 백업 / 복원</div>
+    <div class="sub" style="margin-bottom:9px">아래 코드를 복사해 두면 다른 기기나 브라우저에 그대로 붙여넣어 복원할 수 있습니다. CSV는 클로드 등에 업로드해 분석용으로 쓰기 좋습니다.</div>
+    <textarea id="backup-area" style="min-height:110px;font-family:monospace;font-size:11px"></textarea>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn btn-sec" onclick="exportData()">내보내기</button>
+      <button class="btn btn-sec" onclick="importData()">복원하기</button>
+      <button class="btn btn-sec" onclick="exportCSV()">CSV 저장</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="color:var(--red)">⚠️ 전체 초기화</div>
+    <div class="sub" style="margin-bottom:9px">모든 기록이 삭제됩니다. 되돌릴 수 없습니다.</div>
+    <button class="btn" style="background:var(--red);color:#fff" onclick="resetAll()">전체 삭제</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const KEY='etf_portfolio_v1';
+let DB={trades:[],daily:[],diary:[]};
+
+const ACC=[
+  {id:'DC',name:'DC계좌',cls:'b-acc1',etfKey:'dc',cashKey:'dcCash'},
+  {id:'퇴직연금',name:'퇴직 연금(112)',cls:'b-acc2',etfKey:'co',cashKey:'coCash'},
+  {id:'개인연금',name:'개인 연금(113)',cls:'b-acc3',etfKey:'pe',cashKey:'peCash'}
+];
+
+const won=n=>(n==null||isNaN(n))?'-':Math.round(n).toLocaleString('ko-KR');
+const man=n=>(n==null||isNaN(n))?'-':Math.round(n/10000).toLocaleString('ko-KR')+'만';
+const today=()=>new Date().toISOString().slice(0,10);
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+function save(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify(DB));
+    localStorage.setItem(KEY+'_savedAt',new Date().toISOString());
+    updateSyncBadge();
+  }catch(e){}
+}
+function load(){
+  try{
+    const r=localStorage.getItem(KEY);
+    if(!r) return false;
+    const d=JSON.parse(r);
+    DB={trades:d.trades||[],daily:normalizeDaily(d.daily||[]),diary:d.diary||[]};
+    return true;
+  }catch(e){return false}
+}
+function normalizeDaily(list){
+  return list.map(d=>{
+    const dc=+d.dc||0, co=+d.co||0, pe=+d.pe||0;
+    const dcCash=+d.dcCash||0, coCash=+d.coCash||0, peCash=+d.peCash||0;
+    return {date:d.date,dc,dcCash,co,coCash,pe,peCash,
+      total:dc+dcCash+co+coCash+pe+peCash,
+      kospi:d.kospi==null?null:+d.kospi, memo:d.memo||''};
+  });
+}
+function updateSyncBadge(){
+  const el=document.getElementById('last-sync');
+  if(!el) return;
+  const t=localStorage.getItem(KEY+'_savedAt');
+  el.textContent=t?`이 기기 마지막 저장: ${new Date(t).toLocaleString('ko-KR')}`:'';
+}
+
+/* ── 탭 ── */
+function tab(n){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('p-'+n).classList.add('active');
+  event.target.classList.add('active');
+  if(n==='dash') renderDash();
+  if(n==='data') updateSyncBadge();
+}
+function mtab(n){
+  document.querySelectorAll('.m-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.m-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('m-'+n).classList.add('active');
+  event.target.classList.add('active');
+}
+
+/* ── 매매 ── */
+function addTrade(){
+  const g=id=>document.getElementById(id).value;
+  const qty=parseFloat(g('t-qty')), px=parseFloat(g('t-px'));
+  if(!g('t-date')){alert('날짜를 입력하세요');return}
+  if(!g('t-name').trim()){alert('종목명을 입력하세요');return}
+  if(!qty||!px){alert('수량과 단가를 입력하세요');return}
+  const high=parseFloat(g('t-high'))||null;
+  let stop=parseFloat(g('t-stop'))||null;
+  if(!stop&&high) stop=Math.round(high*0.92);
+  DB.trades.push({
+    id:Date.now(), date:g('t-date'), acc:g('t-acc'), type:g('t-type'),
+    name:g('t-name').trim(), qty, px, amt:qty*px, reason:g('t-reason'),
+    high, stop, kospi:parseFloat(g('t-kospi'))||null,
+    frgn:parseFloat(g('t-frgn'))||null, memo:g('t-memo').trim()
+  });
+  ['t-qty','t-px','t-high','t-stop','t-memo'].forEach(i=>document.getElementById(i).value='');
+  save(); renderTrades(); renderDash();
+}
+function delTrade(id){
+  if(!confirm('이 기록을 삭제할까요?'))return;
+  DB.trades=DB.trades.filter(t=>t.id!==id); save(); renderTrades(); renderDash();
+}
+function renderTrades(){
+  const fa=document.getElementById('f-acc').value, ft=document.getElementById('f-type').value;
+  let list=DB.trades.filter(t=>(!fa||t.acc===fa)&&(!ft||t.type===ft))
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  document.getElementById('trade-cnt').textContent=`(${list.length}건)`;
+  const T=document.getElementById('trade-table');
+  if(!list.length){T.innerHTML='<tr><td class="empty">기록이 없습니다</td></tr>';return}
+  T.innerHTML='<tr><th>날짜</th><th>계좌</th><th>구분</th><th>종목</th><th>수량</th><th>단가</th><th>금액</th><th>사유</th><th>손절가</th><th>코스피</th><th>외국인</th><th>메모</th><th></th></tr>'
+    +list.map(t=>{
+      const acc=ACC.find(a=>a.id===t.acc)||{name:t.acc,cls:''};
+      return `<tr>
+        <td>${t.date.slice(2)}</td>
+        <td><span class="badge ${acc.cls}">${acc.name}</span></td>
+        <td><span class="badge ${t.type==='매수'?'b-buy':'b-sell'}">${t.type}</span></td>
+        <td style="text-align:left;max-width:160px;overflow:hidden;text-overflow:ellipsis">${t.name}</td>
+        <td class="num">${won(t.qty)}</td>
+        <td class="num">${won(t.px)}</td>
+        <td class="num">${won(t.amt)}</td>
+        <td style="font-size:11px">${t.reason}</td>
+        <td class="num">${t.stop?won(t.stop):'-'}</td>
+        <td class="num">${t.kospi?t.kospi.toLocaleString():'-'}</td>
+        <td class="num ${t.frgn>0?'pos':t.frgn<0?'neg':''}">${t.frgn?won(t.frgn):'-'}</td>
+        <td style="font-size:11px;color:var(--muted);text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${t.memo||''}</td>
+        <td><button class="btn btn-del" onclick="delTrade(${t.id})">삭제</button></td>
+      </tr>`}).join('');
+}
+
+/* ── 일별잔고 ── */
+function addDaily(){
+  const g=id=>parseFloat(document.getElementById(id).value)||0;
+  const dateEl=document.getElementById('d-date').value;
+  if(!dateEl){alert('날짜를 입력하세요');return}
+  const dc=g('d-dc'), dcCash=g('d-dc-cash'), co=g('d-co'), coCash=g('d-co-cash'), pe=g('d-pe'), peCash=g('d-pe-cash');
+  if(!dc&&!dcCash&&!co&&!coCash&&!pe&&!peCash){alert('잔고를 하나 이상 입력하세요');return}
+  const kospiV=parseFloat(document.getElementById('d-kospi').value);
+  const i=DB.daily.findIndex(d=>d.date===dateEl);
+  const rec={date:dateEl,dc,dcCash,co,coCash,pe,peCash,total:dc+dcCash+co+coCash+pe+peCash,
+    kospi:isNaN(kospiV)?null:kospiV,memo:document.getElementById('d-memo').value.trim()};
+  if(i>=0){ if(!confirm('같은 날짜 기록이 있습니다. 덮어쓸까요?'))return; DB.daily[i]=rec; }
+  else DB.daily.push(rec);
+  ['d-dc','d-dc-cash','d-co','d-co-cash','d-pe','d-pe-cash','d-kospi','d-memo'].forEach(x=>document.getElementById(x).value='');
+  save(); renderDaily(); renderDash();
+}
+function delDaily(date){
+  if(!confirm('이 기록을 삭제할까요?'))return;
+  DB.daily=DB.daily.filter(d=>d.date!==date); save(); renderDaily(); renderDash();
+}
+function renderDaily(){
+  const list=[...DB.daily].sort((a,b)=>b.date.localeCompare(a.date));
+  const T=document.getElementById('daily-table');
+  if(!list.length){T.innerHTML='<tr><td class="empty">기록이 없습니다</td></tr>';return}
+  T.innerHTML='<tr><th>날짜</th><th>DC(ETF/현금)</th><th>퇴직연금(ETF/현금)</th><th>개인연금(ETF/현금)</th><th>총액</th><th>전일대비</th><th>코스피</th><th>비고</th><th></th></tr>'
+    +list.map((d,i)=>{
+      const prev=list[i+1];
+      const diff=prev?d.total-prev.total:null;
+      return `<tr>
+        <td>${d.date.slice(2)}</td>
+        <td class="num">${man(d.dc)} / ${man(d.dcCash)}</td>
+        <td class="num">${man(d.co)} / ${man(d.coCash)}</td>
+        <td class="num">${man(d.pe)} / ${man(d.peCash)}</td>
+        <td class="num" style="font-weight:700">${man(d.total)}</td>
+        <td class="num ${diff>0?'pos':diff<0?'neg':''}">${diff==null?'-':(diff>0?'+':'')+man(diff)}</td>
+        <td class="num">${d.kospi?d.kospi.toLocaleString():'-'}</td>
+        <td style="font-size:11px;color:var(--muted);text-align:left">${d.memo||''}</td>
+        <td><button class="btn btn-del" onclick="delDaily('${d.date}')">삭제</button></td>
+      </tr>`}).join('');
+}
+
+/* ── 일지 ── */
+function addDiary(){
+  const g=id=>document.getElementById(id).value;
+  if(!g('dy-date')){alert('날짜를 입력하세요');return}
+  if(!g('dy-text').trim()){alert('일지 내용을 입력하세요');return}
+  DB.diary.push({id:Date.now(),date:g('dy-date'),mood:g('dy-mood'),text:g('dy-text').trim()});
+  document.getElementById('dy-text').value='';
+  save(); renderDiary();
+}
+function delDiary(id){
+  if(!confirm('이 일지를 삭제할까요?'))return;
+  DB.diary=DB.diary.filter(d=>d.id!==id); save(); renderDiary();
+}
+function renderDiary(){
+  const L=document.getElementById('diary-list');
+  const list=[...DB.diary].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  if(!list.length){L.innerHTML='<div class="card"><div class="empty">작성된 일지가 없습니다</div></div>';return}
+  L.innerHTML=list.map(d=>{
+    const tr=DB.trades.filter(t=>t.date===d.date);
+    const trHtml=tr.length?`<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:5px">이 날의 매매</div>
+      ${tr.map(t=>`<div style="font-size:11px;color:${t.type==='매수'?'#3fb950':'#f85149'};line-height:1.7">
+        ${t.type} · ${t.name} · ${won(t.qty)}주 @ ${won(t.px)}원 <span style="color:var(--muted)">(${t.reason})</span></div>`).join('')}
+    </div>`:'';
+    return `<div class="diary">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div class="diary-d">${d.date}</div><div class="diary-m">${d.mood}</div></div>
+        <button class="btn btn-del" onclick="delDiary(${d.id})">삭제</button>
+      </div>
+      <div class="diary-t">${d.text.replace(/</g,'&lt;')}</div>
+      ${trHtml}
+    </div>`}).join('');
+}
+
+/* ── 대시보드 ── */
+let chartT=null, chartP=null;
+function renderDash(){
+  const sorted=[...DB.daily].sort((a,b)=>a.date.localeCompare(b.date));
+  const last=sorted[sorted.length-1], first=sorted[0];
+
+  const buy=DB.trades.filter(t=>t.type==='매수').reduce((s,t)=>s+t.amt,0);
+  const sell=DB.trades.filter(t=>t.type==='매도').reduce((s,t)=>s+t.amt,0);
+
+  const total=last?last.total:0;
+  const cashTotal=last?(last.dcCash+last.coCash+last.peCash):0;
+  const diff=(last&&first)?last.total-first.total:0;
+  const rate=(first&&first.total)?((last.total-first.total)/first.total*100):0;
+
+  document.getElementById('dash-stats').innerHTML=[
+    {l:'현재 총자산',v:man(total)+'원',c:''},
+    {l:'현재 예수금(현금)',v:man(cashTotal)+'원',c:''},
+    {l:'기간 증감',v:(diff>0?'+':'')+man(diff)+'원',c:diff>0?'pos':diff<0?'neg':''},
+    {l:'기간 수익률',v:(rate>0?'+':'')+rate.toFixed(1)+'%',c:rate>0?'pos':rate<0?'neg':''},
+    {l:'누적 매수',v:man(buy)+'원',c:''},
+    {l:'누적 매도',v:man(sell)+'원',c:''},
+    {l:'기록 일수',v:sorted.length+'일',c:''}
+  ].map(s=>`<div class="stat"><div class="stat-l">${s.l}</div><div class="stat-v ${s.c}">${s.v}</div></div>`).join('');
+
+  const A=document.getElementById('acc-table');
+  if(last){
+    A.innerHTML='<tr><th>계좌</th><th>ETF평가</th><th>예수금</th><th>합계</th><th>비중</th><th>기간 증감</th></tr>'
+      +ACC.map(a=>{
+        const etf=last[a.etfKey]||0, cash=last[a.cashKey]||0, v=etf+cash;
+        const fEtf=first?(first[a.etfKey]||0):0, fCash=first?(first[a.cashKey]||0):0, d=v-(fEtf+fCash);
+        const w=last.total?(v/last.total*100).toFixed(1):0;
+        return `<tr><td><span class="badge ${a.cls}">${a.name}</span></td>
+          <td class="num">${man(etf)}원</td><td class="num">${man(cash)}원</td>
+          <td class="num" style="font-weight:700">${man(v)}원</td><td class="num">${w}%</td>
+          <td class="num ${d>0?'pos':d<0?'neg':''}">${(d>0?'+':'')+man(d)}원</td></tr>`}).join('')
+      +`<tr style="font-weight:700"><td>합계</td><td class="num">${man(last.dc+last.co+last.pe)}원</td>
+        <td class="num">${man(cashTotal)}원</td><td class="num">${man(last.total)}원</td><td class="num">100%</td>
+        <td class="num ${diff>0?'pos':diff<0?'neg':''}">${(diff>0?'+':'')+man(diff)}원</td></tr>`;
+  } else A.innerHTML='<tr><td class="empty">일별잔고를 입력하면 표시됩니다</td></tr>';
+
+  const labels=sorted.map(d=>d.date.slice(2));
+  const base=first?first.total:0;
+  drawChart('chart-total','총 자산 추이 (ETF+현금)',labels,[
+    {label:'DC계좌',data:sorted.map(d=>d.dc+d.dcCash),color:'#58a6ff'},
+    {label:'퇴직연금',data:sorted.map(d=>d.co+d.coCash),color:'#bc8cff'},
+    {label:'개인연금',data:sorted.map(d=>d.pe+d.peCash),color:'#f0c040'},
+    {label:'총액',data:sorted.map(d=>d.total),color:'#3fb950',width:2.5}
+  ],'T');
+  drawChart('chart-profit','누적 손익액 (첫 기록 대비)',labels,[
+    {label:'누적 손익',data:sorted.map(d=>d.total-base),color:'#3fb950',width:2.5,fill:true}
+  ],'P');
+}
+
+function drawChart(id,title,labels,sets,which){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const old=which==='T'?chartT:chartP;
+  if(old) old.destroy();
+  const c=new Chart(el,{
+    type:'line',
+    data:{labels,datasets:sets.map(s=>({
+      label:s.label,data:s.data,borderColor:s.color,
+      backgroundColor:s.fill?s.color+'22':'transparent',
+      borderWidth:s.width||1.5,pointRadius:0,pointHoverRadius:4,
+      tension:.25,fill:!!s.fill
+    }))},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        title:{display:true,text:title,color:'#f0c040',font:{size:12,weight:'bold'}},
+        legend:{labels:{color:'#7d8590',font:{size:10},boxWidth:12}},
+        tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+man(ctx.parsed.y)+'원'}}
+      },
+      scales:{
+        x:{ticks:{color:'#7d8590',font:{size:9},maxTicksLimit:8},grid:{color:'#30363d40'}},
+        y:{ticks:{color:'#7d8590',font:{size:9},callback:v=>man(v)},grid:{color:'#30363d40'}}
+      }
+    }
+  });
+  if(which==='T') chartT=c; else chartP=c;
+}
+
+/* ── 붙여넣기 가져오기 ── */
+function parseNum(s){
+  if(s==null) return 0;
+  let t=String(s).trim().replace(/[₩,\s"]/g,'');
+  if(!t||t==='-') return 0;
+  let mul=1;
+  if(/억/.test(t)){mul=100000000;t=t.replace(/억/g,'')}
+  else if(/만원|만/.test(t)){mul=10000;t=t.replace(/만원|만/g,'')}
+  else if(/원/.test(t)){t=t.replace(/원/g,'')}
+  const n=parseFloat(t);
+  return isNaN(n)?0:n*mul;
+}
+function parseDate(s){
+  if(!s) return null;
+  const t=String(s).trim().replace(/["']/g,'');
+  let m=t.match(/(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  m=t.match(/^(\d{2})[-./](\d{1,2})[-./](\d{1,2})$/);
+  if(m) return `20${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  return null;
+}
+function importPaste(){
+  const raw=document.getElementById('paste-area').value.trim();
+  if(!raw){alert('붙여넣을 내용이 없습니다');return}
+  const lines=raw.split(/\r?\n/).filter(l=>l.trim());
+  let added=0, skipped=0;
+  lines.forEach(line=>{
+    const cells=line.includes('\t')?line.split('\t'):line.split(',');
+    const date=parseDate(cells[0]);
+    if(!date){skipped++;return}
+    const dc=parseNum(cells[1]), dcCash=parseNum(cells[2]);
+    const co=parseNum(cells[3]), coCash=parseNum(cells[4]);
+    const pe=parseNum(cells[5]), peCash=parseNum(cells[6]);
+    const kospi=cells[7]?parseFloat(String(cells[7]).replace(/[,\s"]/g,'')):null;
+    const memo=cells[8]?String(cells[8]).replace(/"/g,'').trim():'';
+    if(!dc&&!dcCash&&!co&&!coCash&&!pe&&!peCash){skipped++;return}
+    const i=DB.daily.findIndex(d=>d.date===date);
+    const rec={date,dc,dcCash,co,coCash,pe,peCash,total:dc+dcCash+co+coCash+pe+peCash,
+      kospi:isNaN(kospi)?null:kospi,memo};
+    if(i>=0) DB.daily[i]=rec; else DB.daily.push(rec);
+    added++;
+  });
+  save(); renderDaily(); renderDash();
+  toast(`${added}건을 가져왔습니다.${skipped?` (${skipped}건 형식오류 건너뜀)`:''}`);
+  document.getElementById('paste-area').value='';
+}
+
+/* ── 백업 (텍스트) ── */
+function exportData(){
+  document.getElementById('backup-area').value=JSON.stringify(DB);
+  toast('백업 코드가 생성되었습니다. 전체를 복사해 보관하세요.');
+}
+function importData(){
+  const raw=document.getElementById('backup-area').value.trim();
+  if(!raw){alert('복원할 코드를 붙여넣으세요');return}
+  try{
+    const d=JSON.parse(raw);
+    if(!d.trades&&!d.daily&&!d.diary) throw new Error();
+    if(!confirm('현재 기록을 모두 교체합니다. 계속할까요?'))return;
+    DB={trades:d.trades||[],daily:normalizeDaily(d.daily||[]),diary:d.diary||[]};
+    save(); renderAll(); toast('복원했습니다.');
+  }catch(e){alert('올바른 백업 코드가 아닙니다.')}
+}
+
+/* ── 백업 (파일: 구글드라이브 동기화용) ── */
+function exportFile(){
+  const payload={...DB,_exportedAt:new Date().toISOString(),_app:'etf-portfolio-v1'};
+  const blob=new Blob([JSON.stringify(payload,null,0)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`etf관리_백업_${today()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('백업 파일을 다운로드했습니다. 구글 드라이브 폴더로 옮겨두세요.');
+}
+function importFile(evt){
+  const file=evt.target.files&&evt.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const d=JSON.parse(reader.result);
+      if(!d.trades&&!d.daily&&!d.diary) throw new Error();
+      if(!confirm(`"${file.name}" 파일로 현재 기록을 모두 교체합니다. 계속할까요?`))return;
+      DB={trades:d.trades||[],daily:normalizeDaily(d.daily||[]),diary:d.diary||[]};
+      save(); renderAll(); toast('파일을 가져왔습니다.');
+    }catch(e){alert('올바른 백업 파일이 아닙니다.')}
+    evt.target.value='';
+  };
+  reader.readAsText(file,'utf-8');
+}
+
+function exportCSV(){
+  let csv='﻿[일별잔고]\n날짜,DC평가,DC현금,퇴직연금평가,퇴직연금현금,개인연금평가,개인연금현금,총액,코스피,비고\n';
+  [...DB.daily].sort((a,b)=>a.date.localeCompare(b.date))
+    .forEach(d=>{csv+=`${d.date},${d.dc},${d.dcCash},${d.co},${d.coCash},${d.pe},${d.peCash},${d.total},${d.kospi||''},"${d.memo||''}"\n`});
+  csv+='\n[매매기록]\n날짜,계좌,구분,종목,수량,단가,금액,사유,기준고가,손절가,코스피,외국인,메모\n';
+  [...DB.trades].sort((a,b)=>a.date.localeCompare(b.date))
+    .forEach(t=>{csv+=`${t.date},${t.acc},${t.type},"${t.name}",${t.qty},${t.px},${t.amt},${t.reason},${t.high||''},${t.stop||''},${t.kospi||''},${t.frgn||''},"${t.memo||''}"\n`});
+  csv+='\n[투자일지]\n날짜,분위기,내용\n';
+  [...DB.diary].sort((a,b)=>a.date.localeCompare(b.date))
+    .forEach(d=>{csv+=`${d.date},${d.mood},"${d.text.replace(/"/g,'""')}"\n`});
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`ETF관리_${today()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('CSV 파일을 다운로드했습니다. 클로드에 업로드해 분석에 사용할 수 있습니다.');
+}
+function resetAll(){
+  if(!confirm('모든 기록을 삭제합니다. 되돌릴 수 없습니다.'))return;
+  if(!confirm('정말 삭제할까요?'))return;
+  DB={trades:[],daily:[],diary:[]}; save(); renderAll();
+}
+
+function renderAll(){renderTrades();renderDaily();renderDiary();renderDash();updateSyncBadge()}
+
+/* 초기화 */
+['t-date','d-date','dy-date'].forEach(id=>{document.getElementById(id).value=today()});
+load();
+renderAll();
+
+/* PWA: 서비스워커 등록 (http/https 로 서빙될 때만 동작, file:// 에서는 자동 무시) */
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
