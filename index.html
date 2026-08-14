@@ -430,9 +430,12 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
     </div>
     <div class="row" id="cloud-actions" style="display:none">
       <button class="btn" id="cloud-login-btn" onclick="signInGoogle()">🔐 Google로 로그인하고 동기화 시작</button>
+      <button class="btn btn-sec" id="cloud-push-btn" style="display:none" onclick="forcePush()">⬆ 지금 클라우드로 올리기</button>
+      <button class="btn btn-sec" id="cloud-pull-btn" style="display:none" onclick="forcePull()">⬇ 클라우드에서 불러오기</button>
       <button class="btn btn-sec" id="cloud-logout-btn" style="display:none" onclick="signOutCloud()">로그아웃</button>
     </div>
     <div class="sync-badge" id="cloud-status"></div>
+    <div class="sync-badge" id="cloud-account"></div>
   </div>
 
   <div class="card">
@@ -519,9 +522,17 @@ let fbAuth=null, fbDb=null, fbUser=null, unsubDoc=null, applyingRemote=false, pu
 
 function cloudDocRef(uid){ return fbDb.collection('users').doc(uid); }
 
-function setCloudStatus(msg){
+function setCloudStatus(msg,isError){
   const el=document.getElementById('cloud-status');
-  if(el) el.textContent=msg;
+  if(!el) return;
+  el.textContent=msg;
+  el.style.color=isError?'var(--red)':'var(--muted)';
+  if(isError) console.error('[cloud]',msg);
+}
+function setCloudAccount(user){
+  const el=document.getElementById('cloud-account');
+  if(!el) return;
+  el.textContent=user?`계정: ${user.email||'(이메일 없음)'} · uid ${user.uid.slice(0,10)}…`:'';
 }
 
 function initCloud(){
@@ -548,10 +559,11 @@ function initCloud(){
 function onCloudAuthChanged(user){
   fbUser=user;
   if(unsubDoc){unsubDoc();unsubDoc=null}
-  const loginBtn=document.getElementById('cloud-login-btn'), logoutBtn=document.getElementById('cloud-logout-btn');
+  const show=(id,on)=>{const el=document.getElementById(id); if(el) el.style.display=on?'inline-block':'none'};
+  setCloudAccount(user);
   if(user){
-    if(loginBtn) loginBtn.style.display='none';
-    if(logoutBtn) logoutBtn.style.display='inline-block';
+    show('cloud-login-btn',false); show('cloud-logout-btn',true);
+    show('cloud-push-btn',true); show('cloud-pull-btn',true);
     setCloudStatus(`🟢 ${user.displayName||user.email} 로 실시간 동기화 중`);
     unsubDoc=cloudDocRef(user.uid).onSnapshot(snap=>{
       if(!snap.exists){ pushCloud(true); return }
@@ -562,11 +574,50 @@ function onCloudAuthChanged(user){
       try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}
       renderAll();
       applyingRemote=false;
-    },err=>setCloudStatus('동기화 오류: '+err.message));
+    },err=>{
+      setCloudStatus(`❌ 동기화 오류: ${err.code||''} ${err.message}`,true);
+      toast('클라우드 동기화 오류: '+(err.code||err.message));
+    });
   } else {
-    if(loginBtn) loginBtn.style.display='inline-block';
-    if(logoutBtn) logoutBtn.style.display='none';
+    show('cloud-login-btn',true); show('cloud-logout-btn',false);
+    show('cloud-push-btn',false); show('cloud-pull-btn',false);
     setCloudStatus('로그인하면 이 계정으로 여러 기기가 실시간 동기화됩니다.');
+  }
+}
+
+/* 수동 진단·복구: 실제 서버 응답을 그대로 보여준다 */
+async function forcePush(){
+  if(!fbUser){alert('먼저 로그인하세요');return}
+  try{
+    await cloudDocRef(fbUser.uid).set({...DB,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    setCloudStatus(`✅ 클라우드 업로드 성공 (${new Date().toLocaleTimeString('ko-KR')})`);
+    toast('클라우드에 저장했습니다.');
+  }catch(e){
+    setCloudStatus(`❌ 업로드 실패: ${e.code||''} ${e.message}`,true);
+    alert('업로드 실패\n\n코드: '+(e.code||'(없음)')+'\n\n'+e.message);
+  }
+}
+async function forcePull(){
+  if(!fbUser){alert('먼저 로그인하세요');return}
+  try{
+    const snap=await cloudDocRef(fbUser.uid).get({source:'server'});
+    if(!snap.exists){
+      setCloudStatus('클라우드에 저장된 기록이 아직 없습니다.',true);
+      alert('클라우드에 저장된 데이터가 없습니다.\n\n기록이 있는 기기에서 "⬆ 지금 클라우드로 올리기"를 먼저 눌러주세요.');
+      return;
+    }
+    const d=snap.data()||{};
+    if(!confirm('클라우드 데이터로 이 기기의 기록을 교체합니다. 계속할까요?'))return;
+    applyingRemote=true;
+    DB={trades:d.trades||[],daily:normalizeDaily(d.daily||[]),diary:d.diary||[]};
+    try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}
+    renderAll();
+    applyingRemote=false;
+    setCloudStatus(`✅ 클라우드에서 불러왔습니다 (일별 ${DB.daily.length}건 / 매매 ${DB.trades.length}건)`);
+    toast('클라우드에서 불러왔습니다.');
+  }catch(e){
+    setCloudStatus(`❌ 불러오기 실패: ${e.code||''} ${e.message}`,true);
+    alert('불러오기 실패\n\n코드: '+(e.code||'(없음)')+'\n\n'+e.message);
   }
 }
 
@@ -583,7 +634,11 @@ function pushCloud(immediate){
   clearTimeout(pushTimer);
   const run=()=>{
     cloudDocRef(fbUser.uid).set({...DB,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})
-      .catch(e=>setCloudStatus('저장 실패: '+e.message));
+      .then(()=>setCloudStatus(`🟢 실시간 동기화 중 · 마지막 저장 ${new Date().toLocaleTimeString('ko-KR')}`))
+      .catch(e=>{
+        setCloudStatus(`❌ 클라우드 저장 실패: ${e.code||''} ${e.message}`,true);
+        toast('클라우드 저장 실패: '+(e.code||e.message));
+      });
   };
   if(immediate) run(); else pushTimer=setTimeout(run,800);
 }
