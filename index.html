@@ -507,12 +507,12 @@ const today=()=>new Date().toISOString().slice(0,10);
    README.md의 안내대로 Firebase 프로젝트를 만들고 아래 값을 채우면 활성화됩니다.
    채우지 않으면(placeholder 그대로면) 자동으로 건너뛰고 로컬/파일 백업만 동작합니다. */
 const firebaseConfig={
-  apiKey:"YOUR_API_KEY",
-  authDomain:"YOUR_PROJECT.firebaseapp.com",
-  projectId:"YOUR_PROJECT",
-  storageBucket:"YOUR_PROJECT.appspot.com",
-  messagingSenderId:"YOUR_SENDER_ID",
-  appId:"YOUR_APP_ID"
+  apiKey:"AIzaSyD2--Fqs_GY_WjKv-rNI3LgqWY9FHsEdIU",
+  authDomain:"stock-7c52f.firebaseapp.com",
+  projectId:"stock-7c52f",
+  storageBucket:"stock-7c52f.firebasestorage.app",
+  messagingSenderId:"83167936010",
+  appId:"1:83167936010:web:5471de7363a5256239a9f3"
 };
 const cloudConfigured=!!(firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('YOUR_'));
 let fbAuth=null, fbDb=null, fbUser=null, unsubDoc=null, applyingRemote=false, pushTimer=null;
