@@ -536,6 +536,10 @@ function initCloud(){
     const actions=document.getElementById('cloud-actions');
     if(actions) actions.style.display='flex';
     fbAuth.onAuthStateChanged(onCloudAuthChanged);
+    // 모바일 브라우저는 팝업 로그인이 자주 막히므로 리다이렉트 로그인의 결과를 여기서 받는다
+    fbAuth.getRedirectResult().catch(e=>{
+      if(e && e.code!=='auth/no-auth-event') setCloudStatus('로그인 실패: '+e.message);
+    });
   }catch(e){
     setCloudStatus('클라우드 초기화 실패: '+e.message);
   }
@@ -568,8 +572,7 @@ function onCloudAuthChanged(user){
 
 function signInGoogle(){
   if(!fbAuth) return;
-  fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
-    .catch(e=>alert('로그인 실패: '+e.message));
+  fbAuth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
 }
 function signOutCloud(){
   if(!fbAuth) return;
