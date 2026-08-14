@@ -14,6 +14,9 @@
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <style>
 :root{
   --bg:#0d1117; --surface:#161b22; --surface2:#1c2128; --border:#30363d;
@@ -418,8 +421,24 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
 <!-- ─── 데이터 ─── -->
 <div id="p-data" class="panel">
   <div class="card">
-    <div class="card-title">🔗 구글 드라이브 동기화</div>
+    <div class="card-title">☁️ 실시간 클라우드 동기화 (Firebase)</div>
+    <div class="hint" id="cloud-setup-hint">
+      아직 클라우드 동기화가 설정되지 않았습니다. Firebase 프로젝트를 만들고 <b>index.html</b> 안의
+      <b>firebaseConfig</b> 값을 채워 넣으면, 로그인한 기기끼리 기록이 실시간으로 자동 동기화됩니다
+      (무료). 설정 방법은 <b>README.md</b>의 "클라우드 동기화 설정" 항목을 참고하세요.
+      설정 전에도 아래 파일/CSV 백업 기능은 그대로 사용할 수 있습니다.
+    </div>
+    <div class="row" id="cloud-actions" style="display:none">
+      <button class="btn" id="cloud-login-btn" onclick="signInGoogle()">🔐 Google로 로그인하고 동기화 시작</button>
+      <button class="btn btn-sec" id="cloud-logout-btn" style="display:none" onclick="signOutCloud()">로그아웃</button>
+    </div>
+    <div class="sync-badge" id="cloud-status"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔗 구글 드라이브 수동 백업 (보조 수단)</div>
     <div class="hint">
+      클라우드 동기화를 아직 설정하지 않았거나, 만약을 대비한 별도 백업이 필요할 때 사용하세요.<br>
       1) PC/모바일 <b>구글 드라이브</b>에 전용 폴더(예: <b>ETF관리백업</b>)를 하나 만들어 두세요.<br>
       2) 이 기기에서 "파일로 내보내기"를 누르면 JSON 백업 파일이 다운로드됩니다 → 그 파일을 드라이브 폴더로 옮기세요(모바일은 다운로드 후 드라이브 앱의 업로드 기능 이용).<br>
       3) 다른 기기에서는 "파일 가져오기"를 누르고 드라이브 폴더에서 최신 백업 파일을 선택하면 됩니다. 파일 선택창에 구글 드라이브가 보이지 않으면 드라이브 앱을 먼저 설치하세요.<br>
@@ -484,6 +503,88 @@ const won=n=>(n==null||isNaN(n))?'-':Math.round(n).toLocaleString('ko-KR');
 const man=n=>(n==null||isNaN(n))?'-':Math.round(n/10000).toLocaleString('ko-KR')+'만';
 const today=()=>new Date().toISOString().slice(0,10);
 
+/* ── 클라우드 동기화 (Firebase, 선택 사항) ──
+   README.md의 안내대로 Firebase 프로젝트를 만들고 아래 값을 채우면 활성화됩니다.
+   채우지 않으면(placeholder 그대로면) 자동으로 건너뛰고 로컬/파일 백업만 동작합니다. */
+const firebaseConfig={
+  apiKey:"YOUR_API_KEY",
+  authDomain:"YOUR_PROJECT.firebaseapp.com",
+  projectId:"YOUR_PROJECT",
+  storageBucket:"YOUR_PROJECT.appspot.com",
+  messagingSenderId:"YOUR_SENDER_ID",
+  appId:"YOUR_APP_ID"
+};
+const cloudConfigured=!!(firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('YOUR_'));
+let fbAuth=null, fbDb=null, fbUser=null, unsubDoc=null, applyingRemote=false, pushTimer=null;
+
+function cloudDocRef(uid){ return fbDb.collection('users').doc(uid); }
+
+function setCloudStatus(msg){
+  const el=document.getElementById('cloud-status');
+  if(el) el.textContent=msg;
+}
+
+function initCloud(){
+  if(!cloudConfigured || typeof firebase==='undefined') return;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fbAuth=firebase.auth();
+    fbDb=firebase.firestore();
+    fbDb.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    const hint=document.getElementById('cloud-setup-hint');
+    if(hint) hint.style.display='none';
+    const actions=document.getElementById('cloud-actions');
+    if(actions) actions.style.display='flex';
+    fbAuth.onAuthStateChanged(onCloudAuthChanged);
+  }catch(e){
+    setCloudStatus('클라우드 초기화 실패: '+e.message);
+  }
+}
+
+function onCloudAuthChanged(user){
+  fbUser=user;
+  if(unsubDoc){unsubDoc();unsubDoc=null}
+  const loginBtn=document.getElementById('cloud-login-btn'), logoutBtn=document.getElementById('cloud-logout-btn');
+  if(user){
+    if(loginBtn) loginBtn.style.display='none';
+    if(logoutBtn) logoutBtn.style.display='inline-block';
+    setCloudStatus(`🟢 ${user.displayName||user.email} 로 실시간 동기화 중`);
+    unsubDoc=cloudDocRef(user.uid).onSnapshot(snap=>{
+      if(!snap.exists){ pushCloud(true); return }
+      const d=snap.data();
+      if(!d) return;
+      applyingRemote=true;
+      DB={trades:d.trades||[],daily:normalizeDaily(d.daily||[]),diary:d.diary||[]};
+      try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}
+      renderAll();
+      applyingRemote=false;
+    },err=>setCloudStatus('동기화 오류: '+err.message));
+  } else {
+    if(loginBtn) loginBtn.style.display='inline-block';
+    if(logoutBtn) logoutBtn.style.display='none';
+    setCloudStatus('로그인하면 이 계정으로 여러 기기가 실시간 동기화됩니다.');
+  }
+}
+
+function signInGoogle(){
+  if(!fbAuth) return;
+  fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+    .catch(e=>alert('로그인 실패: '+e.message));
+}
+function signOutCloud(){
+  if(!fbAuth) return;
+  fbAuth.signOut();
+}
+function pushCloud(immediate){
+  if(!cloudConfigured || !fbUser || applyingRemote) return;
+  clearTimeout(pushTimer);
+  const run=()=>{
+    cloudDocRef(fbUser.uid).set({...DB,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})
+      .catch(e=>setCloudStatus('저장 실패: '+e.message));
+  };
+  if(immediate) run(); else pushTimer=setTimeout(run,800);
+}
+
 function toast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
@@ -497,6 +598,7 @@ function save(){
     localStorage.setItem(KEY+'_savedAt',new Date().toISOString());
     updateSyncBadge();
   }catch(e){}
+  pushCloud();
 }
 function load(){
   try{
@@ -867,6 +969,7 @@ function renderAll(){renderTrades();renderDaily();renderDiary();renderDash();upd
 ['t-date','d-date','dy-date'].forEach(id=>{document.getElementById(id).value=today()});
 load();
 renderAll();
+initCloud();
 
 /* PWA: 서비스워커 등록 (http/https 로 서빙될 때만 동작, file:// 에서는 자동 무시) */
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
