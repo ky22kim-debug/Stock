@@ -1,7 +1,7 @@
 {
-  "name": "ETF 3계좌 통합 관리",
+  "name": "ETF 계좌 통합 관리",
   "short_name": "ETF관리",
-  "description": "DC/퇴직연금/개인연금 3계좌 ETF 투자 기록·현금 잔고 관리",
+  "description": "ETF 투자 기록·손절계획·현금 잔고를 계좌별로 관리 (계좌 추가/삭제 가능)",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
