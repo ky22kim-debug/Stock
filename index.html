@@ -267,7 +267,8 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
     <div class="row">
       <div class="fg" style="flex:2"><label>매매사유</label><select id="t-reason">
         <option>초기매수</option><option>분할매수</option><option>추가매수</option>
-        <option>8% 손절매수</option><option>-7% 1차재매수</option><option>절정+5% 재매수</option>
+        <option>-2.5% 손절매도</option><option>-5% 손절매도</option><option>-8% 손절매도</option>
+        <option>-7% 1차재매수</option><option>절정+5% 재매수</option>
         <option>모멘텀붕괴 청산</option><option>급등 시 부분익절</option><option>목표가 익절</option><option>기타</option>
       </select></div>
       <div class="fg"><label>기준고가</label><input type="number" id="t-high" placeholder="선택"></div>
@@ -275,9 +276,10 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
     </div>
     <div class="row">
       <div class="fg"><label>코스피</label><input type="number" id="t-kospi" placeholder="6257" step="0.01"></div>
-      <div class="fg"><label>외국인 순매매(억)</label><input type="number" id="t-frgn" placeholder="-28000"></div>
+      <div class="fg"><label>외국인 순매매(억)</label><input type="text" inputmode="decimal" id="t-frgn" placeholder="-28000"></div>
       <div class="fg" style="flex:2"><label>메모</label><input type="text" id="t-memo" placeholder="선택"></div>
-      <button class="btn" onclick="addTrade()">+ 기록</button>
+      <button class="btn" id="t-submit-btn" onclick="addTrade()">+ 기록</button>
+      <button class="btn btn-sec" id="t-cancel-btn" style="display:none" onclick="cancelEditTrade()">취소</button>
     </div>
     <div class="hint">기준고가를 입력하면 손절가(-8%)가 자동 계산됩니다. 매매 기록이 있는 일지는 자동으로 연동됩니다.</div>
   </div>
@@ -391,6 +393,7 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
     <button class="m-tab active" onclick="mtab('stop')">✂️ 손절</button>
     <button class="m-tab" onclick="mtab('rebuy')">🔁 재매수</button>
     <button class="m-tab" onclick="mtab('leader')">💡 주도주 교체</button>
+    <button class="m-tab" onclick="mtab('holdsat')">🎯 홀딩&새틀라이트</button>
     <button class="m-tab" onclick="mtab('bt')">🧪 백테스트 결론</button>
   </div>
 
@@ -519,6 +522,49 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
         내러티브가 살아있어도 <b style="color:#f85149">모멘텀이 깨지면 현금</b>이 맞습니다.<br><br>
         추세추종과 가치투자를 섞으면 안 됩니다. 내러티브를 믿고 손실을 미루는 것이 대형 손실의 시작입니다.<br><br>
         <b style="color:#f0c040">내러티브는 참고, 시기는 확인, 결정은 가격과 룰로.</b>
+      </div>
+    </div>
+  </div>
+
+  <div id="m-holdsat" class="m-panel">
+    <div class="m-card">
+      <div class="m-title">🎯 핵심 개념 — 코어(Core) + 새틀라이트(Satellite)</div>
+      <div class="m-desc">
+        포트폴리오를 두 층으로 나눕니다.<br><br>
+        <b style="color:#58a6ff">코어(핵심)</b> — 시장 전체·대형 우량 ETF 등 <b>장기 보유</b>가 목적. 손절 룰을 적용하지 않고 시장 사이클을 그대로 통과시킵니다.<br><br>
+        <b style="color:#bc8cff">새틀라이트(위성)</b> — 주도주·테마 ETF 등 <b>전술적 대응</b>이 목적. 이 앱의 8% 손절·C전략 재매수·주도주 교체 룰을 그대로 적용합니다.
+      </div>
+      <div class="verdict v-info">코어는 지키는 돈, 새틀라이트는 불리는 돈</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">⚖️ 비중 가이드</div>
+      <div class="m-desc" style="line-height:2">
+        <b style="color:#ffe066">보수적</b> — 코어 80% / 새틀라이트 20%<br>
+        <b style="color:#ffb060">표준</b> — 코어 70% / 새틀라이트 30%<br>
+        <b style="color:#ff6b6b">공격적</b> — 코어 50~60% / 새틀라이트 40~50%<br><br>
+        비중이 낮을수록 전체 성과에서 새틀라이트의 손절·재매수 판단이 흔들려도 계좌 전체 타격은 제한적입니다. <b style="color:#f0c040">코어 비중은 감당 가능한 최대 낙폭(MDD)을 먼저 정하고 역산</b>하는 것이 안전합니다.
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">🔁 리밸런싱 규칙</div>
+      <div class="m-desc">
+        새틀라이트가 크게 올라 목표 비중을 벗어나면(예: +5%p 이상) <b style="color:#58a6ff">코어로 일부 이익 이전</b>합니다. 반대로 새틀라이트 손절로 현금이 쌓이면 코어를 건드리지 않고 <b style="color:#bc8cff">새틀라이트 안에서만 재매수 룰</b>로 재투입합니다.<br><br>
+        코어는 정기적(예: 분기 1회) 리밸런싱 외에는 매매 사유 없이 그대로 둡니다.
+      </div>
+      <div class="verdict v-good">✅ 코어는 무매매가 기본값</div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">🗂️ 이 앱에서 관리하는 법</div>
+      <div class="m-desc" style="line-height:1.9">
+        1) <b>매매기록 탭</b> 매매사유에 "초기매수/분할매수" 등으로 코어·새틀라이트 편입을 구분해 메모란에 "코어" 또는 "새틀라이트"를 남겨두세요.<br>
+        2) <b>손절계획 탭</b>은 새틀라이트 종목만 등록해 관리하세요 — 코어는 손절 대상이 아니므로 표를 만들 필요가 없습니다.<br>
+        3) <b>대시보드 보유종목</b>에서 계좌별 투자원금을 보고 코어/새틀라이트 실제 비중이 목표에서 벗어났는지 주기적으로 확인하세요.
+      </div>
+    </div>
+    <div class="m-card">
+      <div class="m-title">📚 근거</div>
+      <div class="m-desc">
+        코어-새틀라이트 구조는 기관 자산배분에서 널리 쓰이는 방식으로, <b style="color:#58a6ff">시장 베타는 저비용으로 안정적으로 확보</b>하고 <b style="color:#bc8cff">알파(초과수익) 추구는 통제된 일부 자금으로만</b> 시도합니다. 전액을 새틀라이트처럼 운용하면 손절·재매수 판단 오류가 전체 계좌로 그대로 전이되지만, 코어가 버텨주면 개별 판단 실수의 타격이 제한됩니다.
       </div>
     </div>
   </div>
@@ -695,7 +741,7 @@ function normalizeDB(d){
     daily:normalizeDaily(d.daily||[],accounts),
     diary:d.diary||[],
     losscut:{
-      tables:Array.isArray(lc.tables)?lc.tables.map(t=>({rebuyMode:false,lowPoint:null,dropPct:7,...t})):[],
+      tables:Array.isArray(lc.tables)?lc.tables.map(t=>({rebuyMode:false,lowPoint:null,dropPct:7,rebuyUnitPct:2.5,...t})):[],
       nextId:lc.nextId||1
     }
   };
@@ -961,6 +1007,8 @@ function mtab(n){
 }
 
 /* ── 매매 ── */
+let editingTradeId=null;
+
 function addTrade(){
   const g=id=>document.getElementById(id).value;
   const qty=parseFloat(g('t-qty')), px=parseFloat(g('t-px'));
@@ -970,18 +1018,52 @@ function addTrade(){
   const high=parseFloat(g('t-high'))||null;
   let stop=parseFloat(g('t-stop'))||null;
   if(!stop&&high) stop=Math.round(high*0.92);
-  DB.trades.push({
-    id:Date.now(), date:g('t-date'), acc:g('t-acc'), type:g('t-type'),
+  const fields={
+    date:g('t-date'), acc:g('t-acc'), type:g('t-type'),
     name:g('t-name').trim(), qty, px, amt:qty*px, reason:g('t-reason'),
     high, stop, kospi:parseFloat(g('t-kospi'))||null,
     frgn:parseFloat(g('t-frgn'))||null, memo:g('t-memo').trim()
-  });
-  ['t-qty','t-px','t-high','t-stop','t-memo'].forEach(i=>document.getElementById(i).value='');
+  };
+  if(editingTradeId){
+    const i=DB.trades.findIndex(t=>t.id===editingTradeId);
+    if(i>=0) DB.trades[i]={...DB.trades[i], ...fields};
+    cancelEditTrade();
+  } else {
+    DB.trades.push({id:Date.now(), ...fields});
+    ['t-qty','t-px','t-high','t-stop','t-memo'].forEach(i=>document.getElementById(i).value='');
+  }
   save(); renderTrades(); renderDash();
+}
+function startEditTrade(id){
+  const t=DB.trades.find(t=>t.id===id);
+  if(!t) return;
+  editingTradeId=id;
+  document.getElementById('t-date').value=t.date;
+  document.getElementById('t-acc').value=t.acc;
+  document.getElementById('t-type').value=t.type;
+  document.getElementById('t-name').value=t.name;
+  document.getElementById('t-qty').value=t.qty;
+  document.getElementById('t-px').value=t.px;
+  document.getElementById('t-reason').value=t.reason;
+  document.getElementById('t-high').value=t.high??'';
+  document.getElementById('t-stop').value=t.stop??'';
+  document.getElementById('t-kospi').value=t.kospi??'';
+  document.getElementById('t-frgn').value=t.frgn??'';
+  document.getElementById('t-memo').value=t.memo||'';
+  document.getElementById('t-submit-btn').textContent='✓ 수정 저장';
+  document.getElementById('t-cancel-btn').style.display='inline-block';
+  document.getElementById('t-submit-btn').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function cancelEditTrade(){
+  editingTradeId=null;
+  document.getElementById('t-submit-btn').textContent='+ 기록';
+  document.getElementById('t-cancel-btn').style.display='none';
+  ['t-qty','t-px','t-high','t-stop','t-kospi','t-frgn','t-memo'].forEach(i=>document.getElementById(i).value='');
 }
 function delTrade(id){
   if(!confirm('이 기록을 삭제할까요?'))return;
   DB.trades=DB.trades.filter(t=>t.id!==id); save(); renderTrades(); renderDash();
+  if(editingTradeId===id) cancelEditTrade();
 }
 function renderTrades(){
   const fa=document.getElementById('f-acc').value, ft=document.getElementById('f-type').value;
@@ -1006,7 +1088,10 @@ function renderTrades(){
         <td class="num">${t.kospi?t.kospi.toLocaleString():'-'}</td>
         <td class="num ${t.frgn>0?'pos':t.frgn<0?'neg':''}">${t.frgn?won(t.frgn):'-'}</td>
         <td style="font-size:11px;color:var(--muted);text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${t.memo||''}</td>
-        <td><button class="btn btn-del" onclick="delTrade(${t.id})">삭제</button></td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-sec" style="font-size:11px;padding:4px 9px" onclick="startEditTrade(${t.id})">수정</button>
+          <button class="btn btn-del" onclick="delTrade(${t.id})">삭제</button>
+        </td>
       </tr>`}).join('');
 }
 
@@ -1420,12 +1505,13 @@ function lcAddTable(){
   const name=nameEl.value.trim() || '종목 '+DB.losscut.nextId;
   const price=parseFloat(priceEl.value);
   if(!price||price<=0){alert('기준가를 올바르게 입력해주세요.');return}
-  DB.losscut.tables.push({id:DB.losscut.nextId++, name, price, unitPct:lcFormUnit, rebuyMode:false, lowPoint:null, dropPct:7});
+  DB.losscut.tables.push({id:DB.losscut.nextId++, name, price, unitPct:lcFormUnit, rebuyUnitPct:2.5, rebuyMode:false, lowPoint:null, dropPct:7});
   nameEl.value=''; priceEl.value='';
   save(); lcRender();
 }
 function lcRemoveTable(id){ DB.losscut.tables=DB.losscut.tables.filter(t=>t.id!==id); save(); lcRender(); }
 function lcSetCardUnit(id,pct){ const t=DB.losscut.tables.find(t=>t.id===id); if(t){t.unitPct=pct; save(); lcRender();} }
+function lcSetRebuyUnit(id,pct){ const t=DB.losscut.tables.find(t=>t.id===id); if(t){t.rebuyUnitPct=pct; save(); lcRender();} }
 function lcToggleRebuy(id){ const t=DB.losscut.tables.find(t=>t.id===id); if(t){t.rebuyMode=!t.rebuyMode; lcRender();} }
 
 function lcUpdateLowPoint(id,val){
@@ -1446,13 +1532,14 @@ function lcRefreshRebuyResult(id){
   if(el) el.innerHTML=lcRebuyResultHtml(t);
 }
 function lcRebuyResultHtml(t){
-  const unit=t.price*(t.unitPct/100);
+  const rebuyPct=t.rebuyUnitPct||2.5;
+  const unit=t.price*(rebuyPct/100);
   let classicHtml='';
   if(t.lowPoint){
     const buyPrice=t.lowPoint+unit*2;
     classicHtml=`
       <div class="rebuy-result-item"><span>저점 입력가</span><span class="rebuy-val">${fmt(t.lowPoint)}</span></div>
-      <div class="rebuy-result-item"><span>단위가 (기준가×${t.unitPct}%)</span><span class="rebuy-val">${fmt(unit)}</span></div>
+      <div class="rebuy-result-item"><span>재매수 단위가 (기준가×${rebuyPct}%)</span><span class="rebuy-val">${fmt(unit)}</span></div>
       <div class="rebuy-result-item"><span>저점 + 단위×2</span><span class="rebuy-val">${fmt(t.lowPoint)} + ${fmt(unit*2)}</span></div>
       <div class="rebuy-result-item highlight">
         <span>📍 기존 전량매수가</span>
@@ -1474,12 +1561,13 @@ function lcRebuyResultHtml(t){
       <span class="rebuy-val-big">${fmt(dropPrice)}</span>
     </div>
     <div class="rebuy-result-item" style="font-size:.7rem;color:var(--muted)">
-      <span>※ 기존 저점+2.5%×2 조건 중 먼저 도달하는 것으로 매수</span>
+      <span>※ 기존 저점+${rebuyPct}%×2 조건 중 먼저 도달하는 것으로 매수</span>
     </div>`;
   return classicHtml+'<hr class="divider">'+dropHtml;
 }
 function lcRebuyPanelHtml(t){
   const dropPct=t.dropPct||7;
+  const rebuyPct=t.rebuyUnitPct||2.5;
   let fullStopPrice;
   if(t.unitPct===5) fullStopPrice=t.price*0.90;
   else if(t.unitPct===8) fullStopPrice=t.price*0.92;
@@ -1488,7 +1576,15 @@ function lcRebuyPanelHtml(t){
     <div class="rebuy-panel">
       <div class="rebuy-panel-title">🔁 손절 후 재매수 계산</div>
       <div class="rebuy-section">
-        <div class="rebuy-section-title">📐 기존 재매수 — 저점 + 2.5% × 2구간</div>
+        <div class="rebuy-section-title">📐 기존 재매수 — 저점 + 재매수단위 × 2구간</div>
+        <div class="rebuy-row" style="margin-bottom:6px">
+          <label>재매수 단위 (손절 단위와 별개)</label>
+          <div class="card-unit-toggle" style="width:150px">
+            <button class="${rebuyPct===2.5?'active':''}" onclick="lcSetRebuyUnit(${t.id},2.5)">2.5%</button>
+            <button class="${rebuyPct===5?'active':''}" onclick="lcSetRebuyUnit(${t.id},5)">5%</button>
+            <button class="${rebuyPct===8?'active':''}" onclick="lcSetRebuyUnit(${t.id},8)">8%</button>
+          </div>
+        </div>
         <div class="rebuy-row">
           <label>손절 후 최저점</label>
           <input type="number" class="rebuy-input" id="lc-lowpoint-${t.id}"
